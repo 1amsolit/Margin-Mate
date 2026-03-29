@@ -8,7 +8,6 @@ A local dashboard that connects to your Gmail via IMAP, automatically detects or
 - Detects order confirmed, shipped, and cancelled/refunded emails
 - Extracts order numbers, item names, tracking numbers, and carrier links
 - Inventory management — track stock, record sales, calculate revenue & profit
-- Dark UI inspired by Parcel
 
 ## Setup
 
