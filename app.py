@@ -235,7 +235,6 @@ def api_update_config():
         for k, v in data["auspost"].items():
             cfg["auspost"][k] = v
     save_config(cfg)
-    reschedule_checker(cfg)
     return jsonify({"success": True})
 
 
@@ -246,8 +245,6 @@ if __name__ == "__main__":
     fixed = database.rebuild_tracking_urls()
     if fixed:
         print(f"Rebuilt tracking URLs for {fixed} order(s)")
-    cfg = load_config()
-    reschedule_checker(cfg)
     scheduler.start()
     print("Order Tracker running at http://localhost:5000")
     app.run(debug=False, port=5000, use_reloader=False)
