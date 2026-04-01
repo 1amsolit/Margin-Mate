@@ -22,7 +22,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build
-        run: pyinstaller margin_mate.spec --clean
+        run: pyinstaller margin_mate.spec --clean -y
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
