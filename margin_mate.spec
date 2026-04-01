@@ -3,8 +3,16 @@
 # Build with:  pyinstaller margin_mate.spec --clean
 
 import sys
+import os
 
 block_cipher = None
+
+if sys.platform == "darwin":
+    icon = "icon.icns" if os.path.exists("icon.icns") else None
+elif sys.platform == "win32":
+    icon = "icon.ico" if os.path.exists("icon.ico") else None
+else:
+    icon = None
 
 a = Analysis(
     ["app.py"],
@@ -54,7 +62,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="icon.icns",
+    icon=icon,
 )
 
 coll = COLLECT(
@@ -73,7 +81,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="MarginMate.app",
-        icon="icon.icns",
+        icon=icon,
         bundle_identifier="com.marginmate.app",
         info_plist={
             "NSHighResolutionCapable": True,
