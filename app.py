@@ -11,7 +11,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import paths
 import database
 import email_parser as ep
-import auspost_tracker
 
 
 # ── Path setup ────────────────────────────────────────────────────────────────
@@ -112,16 +111,6 @@ def run_email_check():
         _check_lock.release()
 
 
-def run_delivery_check():
-    try:
-        cfg = load_config()
-        count = auspost_tracker.run_delivery_check(cfg)
-        if count:
-            print(f"[Delivery check] {count} order(s) marked delivered")
-    except Exception as e:
-        print(f"[Delivery check] error: {e}")
-
-
 def reschedule_checker(cfg):
     interval = cfg.get("imap", {}).get("check_interval_seconds", 300)
     if scheduler.get_job("email_check"):
@@ -130,11 +119,6 @@ def reschedule_checker(cfg):
         run_email_check, "interval", seconds=interval,
         id="email_check", misfire_grace_time=60,
     )
-    if not scheduler.get_job("delivery_check"):
-        scheduler.add_job(
-            run_delivery_check, "interval", hours=1,
-            id="delivery_check", misfire_grace_time=300,
-        )
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
@@ -194,18 +178,6 @@ def api_email_check():
     t.start()
     return jsonify({"success": True})
 
-
-@app.route("/api/tracking/check", methods=["POST"])
-def api_tracking_check():
-    def _run():
-        try:
-            cfg = load_config()
-            count = auspost_tracker.run_delivery_check(cfg)
-            print(f"[Delivery check] {count} order(s) marked delivered")
-        except Exception as e:
-            print(f"[Delivery check] error: {e}")
-    threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"success": True})
 
 
 @app.route("/api/email/status", methods=["GET"])
@@ -287,11 +259,6 @@ def api_update_config():
             cfg["imap"][k] = v
     if "merchants" in data:
         cfg["merchants"] = data["merchants"]
-    if "auspost" in data:
-        if "auspost" not in cfg:
-            cfg["auspost"] = {}
-        for k, v in data["auspost"].items():
-            cfg["auspost"][k] = v
     save_config(cfg)
     return jsonify({"success": True})
 

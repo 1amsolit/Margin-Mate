@@ -787,9 +787,7 @@ const App = (() => {
       document.getElementById("cfg-pass").value        = imap.password || "";
       document.getElementById("cfg-interval").value    = imap.check_interval_seconds || 300;
       document.getElementById("cfg-days").value        = imap.scan_days_back || 30;
-      document.getElementById("cfg-auspost-key").value = (_config.auspost || {}).api_key || "";
-
-      const container = document.getElementById("merchant-toggles");
+const container = document.getElementById("merchant-toggles");
       container.innerHTML = Object.entries(_config.merchants || {}).map(([name, cfg]) => `
         <div class="merchant-row">
           <div>
@@ -829,23 +827,7 @@ const App = (() => {
     catch(e) { toast(e.message, "error"); }
   }
 
-  async function saveAuspostKey() {
-    const key = document.getElementById("cfg-auspost-key")?.value || "";
-    try {
-      await api.put("/api/config", { auspost: { api_key: key } });
-      toast("AusPost API key saved", "success");
-    } catch(e) { toast(e.message, "error"); }
-  }
-
-  async function checkDeliveries() {
-    try {
-      await api.post("/api/tracking/check", {});
-      toast("Delivery check started…", "info");
-      setTimeout(() => { loadOrders(); loadStats(); }, 3000);
-    } catch(e) { toast(e.message, "error"); }
-  }
-
-  // ── Init ───────────────────────────────────────────────────────
+// ── Init ───────────────────────────────────────────────────────
   function init() {
     loadStats();
     loadOrders();
@@ -864,7 +846,7 @@ const App = (() => {
     toggleOrder, openOrderModal, deleteOrder,
     openInventoryModal, deleteInventoryItem, switchInvSubtab, _pickSuggestion,
     openSaleModal, deleteSale,
-    checkEmails, saveConfig, saveMerchants, saveAuspostKey, checkDeliveries,
+    checkEmails, saveConfig, saveMerchants,
     closeModal, debounce,
     _trackingToggle, _invMargin, _saleItemChange, _saleProfit,
   };
