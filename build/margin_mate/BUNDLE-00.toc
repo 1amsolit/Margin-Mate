@@ -1,0 +1,3 @@
+([('MarginMate',
+   '/Users/iyad/Desktop/Margin-Mate/dist/MarginMate',
+   'EXECUTABLE')],)

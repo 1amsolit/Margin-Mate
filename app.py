@@ -1,10 +1,53 @@
-from flask import Flask, jsonify, request, render_template
-from flask_cors import CORS
-from apscheduler.schedulers.background import BackgroundScheduler
-import json
+import os
+import sys
+import socket
 import threading
 from datetime import datetime, timezone
 
+from flask import Flask, jsonify, request, render_template
+from flask_cors import CORS
+from apscheduler.schedulers.background import BackgroundScheduler
+
+import paths
+import database
+import email_parser as ep
+import auspost_tracker
+
+
+# ── Path setup ────────────────────────────────────────────────────────────────
+
+_RESOURCE_DIR = paths.get_resource_dir()
+_DATA_DIR = paths.get_data_dir()
+CONFIG_PATH = os.path.join(_DATA_DIR, "config.json")
+
+# On first run copy the example config so the user has something to edit
+if not os.path.exists(CONFIG_PATH):
+    import shutil
+    example = os.path.join(_RESOURCE_DIR, "config.example.json")
+    if os.path.exists(example):
+        shutil.copy(example, CONFIG_PATH)
+
+
+# ── Flask app ─────────────────────────────────────────────────────────────────
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_RESOURCE_DIR, "templates"),
+    static_folder=os.path.join(_RESOURCE_DIR, "static"),
+)
+CORS(app)
+
+scheduler = BackgroundScheduler(daemon=True)
+email_status = {
+    "last_check": None,
+    "status": "idle",
+    "message": "Not checked yet",
+    "found": 0,
+}
+_check_lock = threading.Lock()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
@@ -12,28 +55,40 @@ def _now():
 
 def _today():
     return datetime.now(timezone.utc).date().isoformat()
-import database
-import email_parser as ep
-import auspost_tracker
 
-app = Flask(__name__)
-CORS(app)
 
-CONFIG_PATH = "config.json"
-scheduler = BackgroundScheduler(daemon=True)
-email_status = {"last_check": None, "status": "idle", "message": "Not checked yet", "found": 0}
-_check_lock = threading.Lock()
+def _find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def _wait_for_flask(port: int, timeout: float = 10.0) -> bool:
+    import time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("localhost", port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.1)
+    return False
 
 
 def load_config():
+    import json
     with open(CONFIG_PATH) as f:
         return json.load(f)
 
 
 def save_config(cfg):
+    import json
     with open(CONFIG_PATH, "w") as f:
         json.dump(cfg, f, indent=2)
 
+
+# ── Background jobs ───────────────────────────────────────────────────────────
 
 def run_email_check():
     global email_status
@@ -71,12 +126,15 @@ def reschedule_checker(cfg):
     interval = cfg.get("imap", {}).get("check_interval_seconds", 300)
     if scheduler.get_job("email_check"):
         scheduler.remove_job("email_check")
-    scheduler.add_job(run_email_check, "interval", seconds=interval, id="email_check",
-                      misfire_grace_time=60)
-    # Delivery check every hour
+    scheduler.add_job(
+        run_email_check, "interval", seconds=interval,
+        id="email_check", misfire_grace_time=60,
+    )
     if not scheduler.get_job("delivery_check"):
-        scheduler.add_job(run_delivery_check, "interval", hours=1, id="delivery_check",
-                          misfire_grace_time=300)
+        scheduler.add_job(
+            run_delivery_check, "interval", hours=1,
+            id="delivery_check", misfire_grace_time=300,
+        )
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
@@ -105,7 +163,7 @@ def api_add_order():
         data["email_uid"] = f"manual:{_now()}"
     if not data.get("order_date"):
         data["order_date"] = _today()
-    ok = database.upsert_order_by_uid(data)
+    database.upsert_order_by_uid(data)
     return jsonify({"success": True}), 201
 
 
@@ -210,8 +268,8 @@ def api_delete_sale(sale_id):
 
 @app.route("/api/config", methods=["GET"])
 def api_get_config():
-    cfg = load_config()
     import copy
+    cfg = load_config()
     masked = copy.deepcopy(cfg)
     if masked.get("imap", {}).get("password"):
         masked["imap"]["password"] = "••••••••"
@@ -240,11 +298,43 @@ def api_update_config():
 
 # ── Startup ───────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def _start():
     database.init_db()
     fixed = database.rebuild_tracking_urls()
     if fixed:
         print(f"Rebuilt tracking URLs for {fixed} order(s)")
     scheduler.start()
-    print("Order Tracker running at http://localhost:5000")
-    app.run(debug=False, port=5000, use_reloader=False)
+
+
+if __name__ == "__main__":
+    _start()
+
+    # ── Desktop app mode (pywebview) ──────────────────────────────────────────
+    if getattr(sys, "frozen", False) or os.environ.get("MARGIN_MATE_DESKTOP"):
+        import webview
+
+        port = _find_free_port()
+
+        flask_thread = threading.Thread(
+            target=lambda: app.run(debug=False, port=port, use_reloader=False),
+            daemon=True,
+        )
+        flask_thread.start()
+
+        if not _wait_for_flask(port):
+            print("Flask did not start in time", file=sys.stderr)
+            sys.exit(1)
+
+        window = webview.create_window(
+            "Margin Mate",
+            f"http://localhost:{port}",
+            width=1280,
+            height=820,
+            min_size=(900, 600),
+        )
+        webview.start()
+
+    # ── Browser / dev mode ────────────────────────────────────────────────────
+    else:
+        print("Order Tracker running at http://localhost:5000")
+        app.run(debug=False, port=5000, use_reloader=False)

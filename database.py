@@ -1,12 +1,15 @@
+import os
 import sqlite3
 import json
 from datetime import datetime, timezone
+
+import paths
 
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
-DB_PATH = "orders.db"
+DB_PATH = os.path.join(paths.get_data_dir(), "orders.db")
 
 
 def get_conn():
