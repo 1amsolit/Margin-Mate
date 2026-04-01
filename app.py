@@ -332,7 +332,15 @@ if __name__ == "__main__":
             height=820,
             min_size=(900, 600),
         )
-        webview.start()
+        def _bring_to_front():
+            if sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen([
+                    "osascript", "-e",
+                    f'tell application "System Events" to set frontmost of every process whose unix id is {os.getpid()} to true',
+                ])
+
+        webview.start(_bring_to_front)
 
     # ── Browser / dev mode ────────────────────────────────────────────────────
     else:

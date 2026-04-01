@@ -11,8 +11,8 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ("templates",          "templates"),
-        ("static",             "static"),
+        ("templates",           "templates"),
+        ("static",              "static"),
         ("config.example.json", "."),
     ],
     hiddenimports=[
@@ -38,34 +38,42 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# onedir mode — no unpacking on every launch, opens much faster
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="MarginMate",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,          # no terminal window
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,              # replace with "icon.icns" / "icon.ico" when you have one
+    icon="icon.icns",
 )
 
-# macOS — wrap the exe in a .app bundle
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="MarginMate",
+)
+
+# macOS — wrap in a .app bundle
 if sys.platform == "darwin":
     app = BUNDLE(
-        exe,
+        coll,
         name="MarginMate.app",
-        icon=None,          # replace with "icon.icns" when you have one
+        icon="icon.icns",
         bundle_identifier="com.marginmate.app",
         info_plist={
             "NSHighResolutionCapable": True,
