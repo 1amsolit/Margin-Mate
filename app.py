@@ -278,7 +278,18 @@ if __name__ == "__main__":
 
     # ── Desktop app mode (pywebview) ──────────────────────────────────────────
     if getattr(sys, "frozen", False) or os.environ.get("MARGIN_MATE_DESKTOP"):
-        import webview
+        # Force EdgeChromium (WebView2) backend — avoids the pythonnet/WinForms
+        # DLL issue on Windows where Python.Runtime.dll fails to initialise.
+        os.environ.setdefault("PYWEBVIEW_GUI", "edgechromium")
+
+        try:
+            import webview
+        except Exception as e:
+            print(f"pywebview unavailable ({e}), falling back to browser mode", file=sys.stderr)
+            import webbrowser
+            port = 5000
+            app.run(debug=False, port=port, use_reloader=False)
+            sys.exit(0)
 
         port = _find_free_port()
 
@@ -292,22 +303,22 @@ if __name__ == "__main__":
             print("Flask did not start in time", file=sys.stderr)
             sys.exit(1)
 
-        window = webview.create_window(
-            "Margin Mate",
-            f"http://localhost:{port}",
-            width=1280,
-            height=820,
-            min_size=(900, 600),
-        )
-        def _bring_to_front():
-            if sys.platform == "darwin":
-                import subprocess
-                subprocess.Popen([
-                    "osascript", "-e",
-                    f'tell application "System Events" to set frontmost of every process whose unix id is {os.getpid()} to true',
-                ])
-
-        webview.start(_bring_to_front)
+        try:
+            window = webview.create_window(
+                "Margin Mate",
+                f"http://localhost:{port}",
+                width=1280,
+                height=820,
+                min_size=(900, 600),
+            )
+            webview.start()
+        except Exception as e:
+            # WebView2 not installed — open in default browser instead
+            print(f"pywebview failed ({e}), opening in browser", file=sys.stderr)
+            import webbrowser
+            webbrowser.open(f"http://localhost:{port}")
+            # Keep Flask running so the browser tab works
+            flask_thread.join()
 
     # ── Browser / dev mode ────────────────────────────────────────────────────
     else:
